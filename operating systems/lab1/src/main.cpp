@@ -61,222 +61,147 @@ void printReport(const char* filename) {
     file.close();
 }
 
-int main(int argc, char* argv[]) {
-    if (argc == 5) {
-        char binaryFileName[100];
-        char reportFileName[100];
-        int recordCount;
-        double hourlyPayment;
-        
-        strncpy_s(binaryFileName, argv[1], _TRUNCATE);
-        recordCount = std::atoi(argv[2]);
-        strncpy_s(reportFileName, argv[3], _TRUNCATE);
-        hourlyPayment = std::atof(argv[4]);
-        
-        STARTUPINFOA siCreator;
-        PROCESS_INFORMATION piCreator;
-        ZeroMemory(&siCreator, sizeof(siCreator));
-        siCreator.cb = sizeof(siCreator);
-        ZeroMemory(&piCreator, sizeof(piCreator));
-        
-        std::stringstream creatorCmd;
-        creatorCmd << "creator.exe " << binaryFileName << " " << recordCount;
-        std::string creatorCmdStr = creatorCmd.str();
-        char cmdCreator[256];
-        strncpy_s(cmdCreator, creatorCmdStr.c_str(), _TRUNCATE);
-        
-        if (!CreateProcessA(nullptr, cmdCreator, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &siCreator, &piCreator)) {
-            std::cerr << "Error: CreateProcess failed for Creator. Error code: " << GetLastError() << std::endl;
-            return 1;
-        }
-        
-        DWORD waitResult = WaitForSingleObject(piCreator.hProcess, INFINITE);
-        if (waitResult != WAIT_OBJECT_0) {
-            std::cerr << "Error: WaitForSingleObject failed for Creator. Error code: " << GetLastError() << std::endl;
-            CloseHandle(piCreator.hProcess);
-            CloseHandle(piCreator.hThread);
-            return 1;
-        }
-        
-        DWORD exitCodeCreator;
-        if (!GetExitCodeProcess(piCreator.hProcess, &exitCodeCreator)) {
-            std::cerr << "Error: Failed to get exit code from Creator. Error code: " << GetLastError() << std::endl;
-            CloseHandle(piCreator.hProcess);
-            CloseHandle(piCreator.hThread);
-            return 1;
-        }
-        
-        CloseHandle(piCreator.hProcess);
-        CloseHandle(piCreator.hThread);
-        
-        if (exitCodeCreator != 0) {
-            std::cerr << "Error: Creator failed with exit code " << exitCodeCreator << std::endl;
-            return 1;
-        }
-        
-        STARTUPINFOA siReporter;
-        PROCESS_INFORMATION piReporter;
-        ZeroMemory(&siReporter, sizeof(siReporter));
-        siReporter.cb = sizeof(siReporter);
-        ZeroMemory(&piReporter, sizeof(piReporter));
-        
-        std::stringstream reporterCmd;
-        reporterCmd << "reporter.exe " << binaryFileName << " " << std::fixed << std::setprecision(2) << hourlyPayment << " " << reportFileName;
-        std::string reporterCmdStr = reporterCmd.str();
-        char cmdReporter[256];
-        strncpy_s(cmdReporter, reporterCmdStr.c_str(), _TRUNCATE);
-        
-        if (!CreateProcessA(nullptr, cmdReporter, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &siReporter, &piReporter)) {
-            std::cerr << "Error: CreateProcess failed for Reporter. Error code: " << GetLastError() << std::endl;
-            return 1;
-        }
-        
-        waitResult = WaitForSingleObject(piReporter.hProcess, INFINITE);
-        if (waitResult != WAIT_OBJECT_0) {
-            std::cerr << "Error: WaitForSingleObject failed for Reporter. Error code: " << GetLastError() << std::endl;
-            CloseHandle(piReporter.hProcess);
-            CloseHandle(piReporter.hThread);
-            return 1;
-        }
-        
-        DWORD exitCodeReporter;
-        if (!GetExitCodeProcess(piReporter.hProcess, &exitCodeReporter)) {
-            std::cerr << "Error: Failed to get exit code from Reporter. Error code: " << GetLastError() << std::endl;
-            CloseHandle(piReporter.hProcess);
-            CloseHandle(piReporter.hThread);
-            return 1;
-        }
-        
-        CloseHandle(piReporter.hProcess);
-        CloseHandle(piReporter.hThread);
-        
-        if (exitCodeReporter != 0) {
-            std::cerr << "Error: Reporter failed with exit code " << exitCodeReporter << std::endl;
-            return 1;
-        }
-        
-        std::cout << "\nProgram completed successfully." << std::endl;
-        return 0;
+bool runProcess(const char* command, DWORD& exitCode) {
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    char cmd[256];
+    strncpy_s(cmd, command, _TRUNCATE);
+
+    if (!CreateProcessA(nullptr, cmd, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+        std::cerr << "Error: CreateProcess failed. Error code: " << GetLastError() << std::endl;
+        return false;
     }
-    char binaryFileName[100];
-    char reportFileName[100];
-    int recordCount = 0;
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    
+    if (!GetExitCodeProcess(pi.hProcess, &exitCode)) {
+        std::cerr << "Error: Failed to get exit code. Error code: " << GetLastError() << std::endl;
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        return false;
+    }
+
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return true;
+}
+
+bool getFilenameWithExtension(char* buffer, const char* extension, const char* prompt) {
     while (true) {
-        std::cout << "Enter binary file name (with .bin extension): ";
-        if (!(std::cin >> binaryFileName)) {
+        std::cout << prompt;
+        if (!(std::cin >> buffer)) {
             std::cerr << "Error: Failed to read file name." << std::endl;
             std::cin.clear();
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
         }
-        size_t len = std::strlen(binaryFileName);
-        if (len >= 4 && std::strcmp(binaryFileName + len - 4, ".bin") == 0) {
-            break;
+        size_t len = std::strlen(buffer);
+        if (len >= 4 && std::strcmp(buffer + len - 4, extension) == 0) {
+            return true;
         }
-        std::cerr << "Error: File name must end with .bin" << std::endl;
+        std::cerr << "Error: File name must end with " << extension << std::endl;
     }
+}
+
+bool handleCreator(const char* binaryFileName, int recordCount, bool interactive) {
+    std::stringstream creatorCmd;
+    creatorCmd << "creator.exe " << binaryFileName << " " << recordCount;
+    
+    DWORD exitCode;
+    if (!runProcess(creatorCmd.str().c_str(), exitCode)) {
+        return false;
+    }
+
+    if (exitCode != 0) {
+        std::cerr << "Error: Creator failed with exit code " << exitCode << std::endl;
+        return false;
+    }
+
+    if (interactive) {
+        printBinaryFile(binaryFileName);
+    }
+    return true;
+}
+
+bool handleReporter(const char* binaryFileName, const char* reportFileName, double hourlyPayment, bool interactive) {
+    std::stringstream reporterCmd;
+    reporterCmd << "reporter.exe " << binaryFileName << " " 
+                << std::fixed << std::setprecision(2) << hourlyPayment << " " 
+                << reportFileName;
+    
+    DWORD exitCode;
+    if (!runProcess(reporterCmd.str().c_str(), exitCode)) {
+        return false;
+    }
+
+    if (exitCode != 0) {
+        std::cerr << "Error: Reporter failed with exit code " << exitCode << std::endl;
+        return false;
+    }
+
+    if (interactive) {
+        printReport(reportFileName);
+    }
+    return true;
+}
+
+int main(int argc, char* argv[]) {
+    char binaryFileName[100];
+    char reportFileName[100];
+    int recordCount;
+    double hourlyPayment;
+
+    if (argc == 5) {
+        // Режим командной строки
+        strncpy_s(binaryFileName, argv[1], _TRUNCATE);
+        recordCount = std::atoi(argv[2]);
+        strncpy_s(reportFileName, argv[3], _TRUNCATE);
+        hourlyPayment = std::atof(argv[4]);
+
+        if (!handleCreator(binaryFileName, recordCount, false) ||
+            !handleReporter(binaryFileName, reportFileName, hourlyPayment, false)) {
+            return 1;
+        }
+
+        std::cout << "\nProgram completed successfully." << std::endl;
+        return 0;
+    }
+
+    // Интерактивный режим
+    getFilenameWithExtension(binaryFileName, ".bin", "Enter binary file name (with .bin extension): ");
+
     std::cout << "Enter record count: ";
     while (!(std::cin >> recordCount) || recordCount <= 0) {
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cerr << "Error: Record count must be a positive integer. Try again: ";
     }
-    STARTUPINFOA siCreator;
-    PROCESS_INFORMATION piCreator;
-    ZeroMemory(&siCreator, sizeof(siCreator));
-    siCreator.cb = sizeof(siCreator);
-    ZeroMemory(&piCreator, sizeof(piCreator));
-    std::stringstream creatorCmd;
-    creatorCmd << "creator.exe " << binaryFileName << " " << recordCount;
-    std::string creatorCmdStr = creatorCmd.str();
-    char cmdCreator[256];
-    strncpy_s(cmdCreator, creatorCmdStr.c_str(), _TRUNCATE);
-    if (!CreateProcessA(nullptr, cmdCreator, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &siCreator, &piCreator)) {
-        std::cerr << "Error: CreateProcess failed for Creator. Error code: " << GetLastError() << std::endl;
+
+    if (!handleCreator(binaryFileName, recordCount, true)) {
         return 1;
     }
-    DWORD waitResult = WaitForSingleObject(piCreator.hProcess, INFINITE);
-    if (waitResult != WAIT_OBJECT_0) {
-        std::cerr << "Error: WaitForSingleObject failed for Creator. Error code: " << GetLastError() << std::endl;
-        CloseHandle(piCreator.hProcess);
-        CloseHandle(piCreator.hThread);
-        return 1;
-    }
-    DWORD exitCodeCreator;
-    if (!GetExitCodeProcess(piCreator.hProcess, &exitCodeCreator)) {
-        std::cerr << "Error: Failed to get exit code from Creator. Error code: " << GetLastError() << std::endl;
-        CloseHandle(piCreator.hProcess);
-        CloseHandle(piCreator.hThread);
-        return 1;
-    }
-    CloseHandle(piCreator.hProcess);
-    CloseHandle(piCreator.hThread);
-    if (exitCodeCreator != 0) {
-        std::cerr << "Error: Creator failed with exit code " << exitCodeCreator << std::endl;
-        return 1;
-    }
-    printBinaryFile(binaryFileName);
-    while (true) {
-        std::cout << "Enter report file name (with .txt extension): ";
-        if (!(std::cin >> reportFileName)) {
-            std::cerr << "Error: Failed to read file name." << std::endl;
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            continue;
-        }
-        size_t len = std::strlen(reportFileName);
-        if (len >= 4 && std::strcmp(reportFileName + len - 4, ".txt") == 0) {
-            break;
-        }
-        std::cerr << "Error: File name must end with .txt" << std::endl;
-    }
-    double hourlyPayment = 0.0;
+
+    getFilenameWithExtension(reportFileName, ".txt", "Enter report file name (with .txt extension): ");
+
     std::cout << "\nEnter hourly payment: ";
     while (!(std::cin >> hourlyPayment) || hourlyPayment < 0) {
         std::cin.clear();
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cerr << "Error: Hourly payment must be a non-negative number. Try again: ";
     }
-    STARTUPINFOA siReporter;
-    PROCESS_INFORMATION piReporter;
-    ZeroMemory(&siReporter, sizeof(siReporter));
-    siReporter.cb = sizeof(siReporter);
-    ZeroMemory(&piReporter, sizeof(piReporter));
-    std::stringstream reporterCmd;
-    reporterCmd << "reporter.exe " << binaryFileName << " " << std::fixed << std::setprecision(2) << hourlyPayment << " " << reportFileName;
-    std::string reporterCmdStr = reporterCmd.str();
-    char cmdReporter[256];
-    strncpy_s(cmdReporter, reporterCmdStr.c_str(), _TRUNCATE);
-    if (!CreateProcessA(nullptr, cmdReporter, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &siReporter, &piReporter)) {
-        std::cerr << "Error: CreateProcess failed for Reporter. Error code: " << GetLastError() << std::endl;
+
+    if (!handleReporter(binaryFileName, reportFileName, hourlyPayment, true)) {
         return 1;
     }
-    waitResult = WaitForSingleObject(piReporter.hProcess, INFINITE);
-    if (waitResult != WAIT_OBJECT_0) {
-        std::cerr << "Error: WaitForSingleObject failed for Reporter. Error code: " << GetLastError() << std::endl;
-        CloseHandle(piReporter.hProcess);
-        CloseHandle(piReporter.hThread);
-        return 1;
-    }
-    DWORD exitCodeReporter;
-    if (!GetExitCodeProcess(piReporter.hProcess, &exitCodeReporter)) {
-        std::cerr << "Error: Failed to get exit code from Reporter. Error code: " << GetLastError() << std::endl;
-        CloseHandle(piReporter.hProcess);
-        CloseHandle(piReporter.hThread);
-        return 1;
-    }
-    CloseHandle(piReporter.hProcess);
-    CloseHandle(piReporter.hThread);
-    if (exitCodeReporter != 0) {
-        std::cerr << "Error: Reporter failed with exit code " << exitCodeReporter << std::endl;
-        return 1;
-    }
-    printReport(reportFileName);
+
     std::cout << "\nProgram completed successfully." << std::endl;
+    
     if (std::getenv("NO_PAUSE") == nullptr) {
         system("pause");
     }
     return 0;
 }
-//ctest -C Debug --output-on-failure
-//cmake --build . --config Debug
