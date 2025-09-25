@@ -22,7 +22,7 @@ DWORD WINAPI min_max_thread(LPVOID lpParam) {
     MinMaxParams* params = (MinMaxParams*)lpParam;
 
     if (params->array.empty()) {
-        cout << "Поток min_max: массив пуст" << endl;
+        cout << "РџРѕС‚РѕРє min_max: РјР°СЃСЃРёРІ РїСѓСЃС‚" << endl;
         return 0;
     }
 
@@ -41,7 +41,7 @@ DWORD WINAPI min_max_thread(LPVOID lpParam) {
         Sleep(7);
     }
 
-    cout << "Поток min_max: min = " << params->array[params->minIndex]
+    cout << "РџРѕС‚РѕРє min_max: min = " << params->array[params->minIndex]
         << ", max = " << params->array[params->maxIndex] << endl;
 
     return 0;
@@ -51,7 +51,7 @@ DWORD WINAPI average_thread(LPVOID lpParam) {
     AverageParams* params = (AverageParams*)lpParam;
 
     if (params->array.empty()) {
-        cout << "Поток average: массив пуст" << endl;
+        cout << "РџРѕС‚РѕРє average: РјР°СЃСЃРёРІ РїСѓСЃС‚" << endl;
         params->average = 0.0;
         return 0;
     }
@@ -63,36 +63,70 @@ DWORD WINAPI average_thread(LPVOID lpParam) {
     }
 
     params->average = sum / params->array.size();
-    cout << "Поток average: среднее = " << params->average << endl;
+    cout << "РџРѕС‚РѕРє average: СЃСЂРµРґРЅРµРµ = " << params->average << endl;
 
     return 0;
 }
 
 int safe_input_int(const string& prompt) {
     int value;
-    cin >> value
+    while (true) {
+        cout << prompt;
+        if (cin >> value) {
+            break;
+        }
+        else {
+            cout << "РћС€РёР±РєР°! Р’РІРµРґРёС‚Рµ С†РµР»РѕРµ С‡РёСЃР»Рѕ: ";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        }
+    }
     return value;
 }
-int main() {
+#ifndef TESTING
+int main(int argc, char** argv) {
     SetConsoleCP(1251);
     SetConsoleOutputCP(1251);
 
-    int size = safe_input_int("Введите размер массива (положительное целое число): ");
+    int size = safe_input_int("Р’РІРµРґРёС‚Рµ СЂР°Р·РјРµСЂ РјР°СЃСЃРёРІР° (РїРѕР»РѕР¶РёС‚РµР»СЊРЅРѕРµ С†РµР»РѕРµ С‡РёСЃР»Рѕ): ");
+    while (size <= 0) {
+        cout << "РћС€РёР±РєР°! Р Р°Р·РјРµСЂ РјР°СЃСЃРёРІР° РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРѕР»РѕР¶РёС‚РµР»СЊРЅС‹Рј: ";
+        size = safe_input_int("");
+    }
 
     vector<int> array(size);
-    cout << "Введите " << size << " элементов массива:" << endl;
+    cout << "Р’РІРµРґРёС‚Рµ " << size << " СЌР»РµРјРµРЅС‚РѕРІ РјР°СЃСЃРёРІР°:" << endl;
     for (int i = 0; i < size; i++) {
-        array[i] = safe_input_int("Элемент [" + to_string(i) + "]: ");
+        array[i] = safe_input_int("Р­Р»РµРјРµРЅС‚ [" + to_string(i) + "]: ");
     }
 
     MinMaxParams minMaxParams = { array, 0, 0 };
     AverageParams averageParams = { array, 0.0 };
 
+    HANDLE hMinMax = CreateThread(NULL, 0, min_max_thread, &minMaxParams, 0, NULL);
+    if (hMinMax == NULL) {
+        cerr << "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РїРѕС‚РѕРєР° min_max: " << GetLastError() << endl;
+        return 1;
+    }
+
+    HANDLE hAverage = CreateThread(NULL, 0, average_thread, &averageParams, 0, NULL);
+    if (hAverage == NULL) {
+        cerr << "РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РїРѕС‚РѕРєР° average: " << GetLastError() << endl;
+        CloseHandle(hMinMax);
+        return 1;
+    }
+
+    WaitForSingleObject(hMinMax, INFINITE);
+    WaitForSingleObject(hAverage, INFINITE);
+
+    CloseHandle(hMinMax);
+    CloseHandle(hAverage);
+
     if (!array.empty()) {
         array[minMaxParams.minIndex] = static_cast<int>(averageParams.average);
         array[minMaxParams.maxIndex] = static_cast<int>(averageParams.average);
 
-        cout << "Измененный массив: ";
+        cout << "РР·РјРµРЅРµРЅРЅС‹Р№ РјР°СЃСЃРёРІ: ";
         for (int i = 0; i < array.size(); i++) {
             cout << array[i] << " ";
         }
@@ -101,3 +135,8 @@ int main() {
 
     return 0;
 }
+#endif
+//cd C:\Programs\lab2\build
+//cmake ..
+//cmake --build .
+//ctest --test-dir build
