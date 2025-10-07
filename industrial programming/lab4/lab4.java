@@ -70,6 +70,25 @@ class RecordBook {
         return examCount > 0 ? (double) totalGrade / examCount : 0.0;
     }
 
+    // Метод для проверки, является ли студент отличником
+    public boolean isExcellent() {
+        for (Session session : sessions) {
+            // Проверяем, что все экзамены с оценкой 9 или 10
+            for (Exam exam : session.getExams()) {
+                if (exam.getGrade() < 9) {
+                    return false;
+                }
+            }
+            // Проверяем, что все зачеты сданы
+            for (Test test : session.getTests()) {
+                if (!test.isPassed()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     // Внутренний класс Session
     public class Session {
         private int sessionNumber;
@@ -111,6 +130,23 @@ class RecordBook {
                 total += exam.getGrade();
             }
             return (double) total / exams.size();
+        }
+
+        // Метод для проверки, сдана ли сессия на отлично
+        public boolean isSessionExcellent() {
+            // Проверяем экзамены
+            for (Exam exam : exams) {
+                if (exam.getGrade() < 9) {
+                    return false;
+                }
+            }
+            // Проверяем зачеты
+            for (Test test : tests) {
+                if (!test.isPassed()) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 }
@@ -160,6 +196,11 @@ class Student {
     // Метод для получения полного имени
     public String getFullName() {
         return lastName + " " + firstName + " " + patronymic;
+    }
+
+    // Метод для проверки, является ли студент отличником
+    public boolean isExcellent() {
+        return recordBook.isExcellent();
     }
 }
 
@@ -291,9 +332,18 @@ public class lab4 {
             writer.println("=================");
             writer.println();
 
+            int excellentStudentsCount = 0;
+
             for (Student student : students) {
                 writer.println("СТУДЕНТ: " + student.getFullName());
                 writer.println("Курс: " + student.getCourse() + ", Группа: " + student.getGroup());
+
+                // Проверяем, является ли студент отличником
+                boolean isExcellent = student.isExcellent();
+                if (isExcellent) {
+                    writer.println("СТАТУС: ОТЛИЧНИК");
+                    excellentStudentsCount++;
+                }
                 writer.println();
 
                 RecordBook recordBook = student.getRecordBook();
@@ -314,6 +364,10 @@ public class lab4 {
 
                     double sessionAverage = session.getSessionAverage();
                     writer.printf("Средний балл за сессию: %.2f\n", sessionAverage);
+
+                    // Проверяем, сдана ли сессия на отлично
+                    boolean isSessionExcellent = session.isSessionExcellent();
+                    writer.println("Статус сессии: " + (isSessionExcellent ? "ОТЛИЧНО" : "НЕ ОТЛИЧНО"));
                     writer.println();
                 }
 
@@ -325,6 +379,7 @@ public class lab4 {
             // Добавляем общую статистику
             writer.println("ОБЩАЯ СТАТИСТИКА:");
             writer.println("Всего студентов: " + students.size());
+            writer.println("Количество отличников: " + excellentStudentsCount);
 
             if (!students.isEmpty()) {
                 double totalAverage = students.stream()
@@ -332,6 +387,10 @@ public class lab4 {
                         .average()
                         .orElse(0.0);
                 writer.printf("Средний балл по всем студентам: %.2f\n", totalAverage);
+
+                // Процент отличников
+                double excellentPercentage = (double) excellentStudentsCount / students.size() * 100;
+                writer.printf("Процент отличников: %.2f%%\n", excellentPercentage);
             }
 
         } catch (IOException e) {
