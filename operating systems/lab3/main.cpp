@@ -52,6 +52,15 @@ int main() {
             });
         }
         
+        std::cout << "\nArray contents:" << std::endl;
+        {
+            std::unique_lock<std::mutex> lock(array_mutex);
+            for (size_t i = 0; i < array.size(); ++i) {
+                std::cout << array[i] << " ";
+            }
+            std::cout << std::endl;
+        }
+        
         int thread_to_stop;
         std::cout << "Enter thread number to stop: ";
         std::cin >> thread_to_stop;
@@ -64,14 +73,27 @@ int main() {
             active_threads--;
             
             std::cout << "\nArray contents after stopping thread " << thread_to_stop << ":" << std::endl;
-
+            {
+                std::unique_lock<std::mutex> lock(array_mutex);
+                for (size_t i = 0; i < array.size(); ++i) {
+                    std::cout << array[i] << " ";
+                }
+                std::cout << std::endl;
+            }
             
             for (int i = 0; i < thread_count; ++i) {
                 if (!thread_finished[i] && threads[i]->isWaiting()) {
                     threads[i]->resume();
                 }
             }
-
+        } else {
+            std::cout << "Invalid thread number or thread already finished" << std::endl;
+            
+            for (int i = 0; i < thread_count; ++i) {
+                if (!thread_finished[i] && threads[i]->isWaiting()) {
+                    threads[i]->resume();
+                }
+            }
         }
     }
     
