@@ -7,12 +7,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class LoginController {
 
     @GetMapping("/login")
-    public String login() {
+    public String loginPage() {
         return "login";
     }
 
-    @GetMapping("/home")
-    public String home() {
-        return "home";
+    @GetMapping("/register")
+    public String registerPage() {
+        return "register"; // файл register.html в templates
     }
 }

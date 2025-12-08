@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<library>
+    <book available="2" id="1" total="13">
+        <title>Война и мир</title>
+        <author>Лев Толстой</author>
+        <year>1869</year>
+        <category>Роман</category>
+        <price>100.0</price>
+    </book>
+    <book available="0" id="2" total="4">
+        <title>Преступление и наказание</title>
+        <author>Федор Достоевский</author>
+        <year>1866</year>
+        <category>Детектив</category>
+        <price>380.0</price>
+    </book>
+    <book available="4" id="3" total="6">
+        <title>Мастер и Маргарита</title>
+        <author>Михаил Булгаков</author>
+        <year>1966</year>
+        <category>Фантастика</category>
+        <price>420.0</price>
+    </book>
+    <book available="0" id="4" total="3">
+        <title>Анна Каренина</title>
+        <author>Лев Толстой</author>
+        <year>1877</year>
+        <category>Роман</category>
+        <price>520.0</price>
+    </book>
+    <book available="5" id="5" total="8">
+        <title>Идиот</title>
+        <author>Федор Достоевский</author>
+        <year>1869</year>
+        <category>Психологический роман</category>
+        <price>480.0</price>
+    </book>
+    <book available="3" id="6" total="5">
+        <title>Евгений Онегин</title>
+        <author>Александр Пушкин</author>
+        <year>1833</year>
+        <category>Поэма</category>
+        <price>250.0</price>
+    </book>
+    <book available="7" id="7" total="10">
+        <title>Мёртвые души</title>
+        <author>Николай Гоголь</author>
+        <year>1842</year>
+        <category>Роман</category>
+        <price>320.0</price>
+    </book>
+    <book available="2" id="8" total="4">
+        <title>Отцы и дети</title>
+        <author>Иван Тургенев</author>
+        <year>1862</year>
+        <category>Роман</category>
+        <price>290.0</price>
+    </book>
+    <book available="5" id="9" total="7">
+        <title>Братья Карамазовы</title>
+        <author>Федор Достоевский</author>
+        <year>1880</year>
+        <category>Психологический роман</category>
+        <price>550.0</price>
+    </book>
+    <book available="4" id="10" total="6">
+        <title>Воскресение</title>
+        <author>Лев Толстой</author>
+        <year>1899</year>
+        <category>Роман</category>
+        <price>340.0</price>
+    </book>
+    <book available="6" id="11" total="8">
+        <title>Обломов</title>
+        <author>Иван Гончаров</author>
+        <year>1859</year>
+        <category>Роман</category>
+        <price>310.0</price>
+    </book>
+    <book available="3" id="12" total="5">
+        <title>Тихий Дон</title>
+        <author>Михаил Шолохов</author>
+        <year>1940</year>
+        <category>Исторический роман</category>
+        <price>490.0</price>
+    </book>
+    <book available="8" id="13" total="12">
+        <title>Доктор Живаго</title>
+        <author>Борис Пастернак</author>
+        <year>1957</year>
+        <category>Роман</category>
+        <price>450.0</price>
+    </book>
+    <book available="2" id="14" total="4">
+        <title>Собачье сердце</title>
+        <author>Михаил Булгаков</author>
+        <year>1925</year>
+        <category>Фантастика</category>
+        <price>280.0</price>
+    </book>
+    <book available="5" id="15" total="7">
+        <title>Белая гвардия</title>
+        <author>Михаил Булгаков</author>
+        <year>1924</year>
+        <category>Исторический роман</category>
+        <price>360.0</price>
+    </book>
+    <book available="4" id="16" total="6">
+        <title>Капитанская дочка</title>
+        <author>Александр Пушкин</author>
+        <year>1836</year>
+        <category>Исторический роман</category>
+        <price>220.0</price>
+    </book>
+    <book available="6" id="17" total="9">
+        <title>Герой нашего времени</title>
+        <author>Михаил Лермонтов</author>
+        <year>1840</year>
+        <category>Роман</category>
+        <price>270.0</price>
+    </book>
+    <book available="3" id="18" total="5">
+        <title>Ревизор</title>
+        <author>Николай Гоголь</author>
+        <year>1836</year>
+        <category>Комедия</category>
+        <price>200.0</price>
+    </book>
+    <book available="7" id="19" total="10">
+        <title>Вишневый сад</title>
+        <author>Антон Чехов</author>
+        <year>1904</year>
+        <category>Драма</category>
+        <price>230.0</price>
+    </book>
+    <book available="4" id="20" total="6">
+        <title>Три сестры</title>
+        <author>Антон Чехов</author>
+        <year>1901</year>
+        <category>Драма</category>
+        <price>240.0</price>
+    </book>
+    <book available="5" id="21" total="8">
+        <title>Дядя Ваня</title>
+        <author>Антон Чехов</author>
+        <year>1897</year>
+        <category>Драма</category>
+        <price>210.0</price>
+    </book>
+    <book available="2" id="22" total="4">
+        <title>Горе от ума</title>
+        <author>Александр Грибоедов</author>
+        <year>1824</year>
+        <category>Комедия</category>
+        <price>190.0</price>
+    </book>
+    <book available="6" id="23" total="9">
+        <title>Что делать?</title>
+        <author>Николай Чернышевский</author>
+        <year>1863</year>
+        <category>Роман</category>
+        <price>300.0</price>
+    </book>
+    <book available="3" id="24" total="5">
+        <title>Накануне</title>
+        <author>Иван Тургенев</author>
+        <year>1860</year>
+        <category>Роман</category>
+        <price>260.0</price>
+    </book>
+    <book available="4" id="25" total="7">
+        <title>Дворянское гнездо</title>
+        <author>Иван Тургенев</author>
+        <year>1859</year>
+        <category>Роман</category>
+        <price>275.0</price>
+    </book>
+    <book available="8" id="26" total="12">
+        <title>Бесы</title>
+        <author>Федор Достоевский</author>
+        <year>1872</year>
+        <category>Психологический роман</category>
+        <price>510.0</price>
+    </book>
+    <book available="5" id="27" total="8">
+        <title>Игрок</title>
+        <author>Федор Достоевский</author>
+        <year>1866</year>
+        <category>Роман</category>
+        <price>330.0</price>
+    </book>
+    <book available="2" id="28" total="4">
+        <title>Бедные люди</title>
+        <author>Федор Достоевский</author>
+        <year>1846</year>
+        <category>Роман</category>
+        <price>250.0</price>
+    </book>
+    <book available="6" id="29" total="9">
+        <title>Севастопольские рассказы</title>
+        <author>Лев Толстой</author>
+        <year>1855</year>
+        <category>Рассказы</category>
+        <price>280.0</price>
+    </book>
+    <book available="3" id="30" total="5">
+        <title>Хаджи-Мурат</title>
+        <author>Лев Толстой</author>
+        <year>1912</year>
+        <category>Повесть</category>
+        <price>320.0</price>
+    </book>
+</library>

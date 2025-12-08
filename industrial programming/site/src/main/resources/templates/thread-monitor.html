@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Мониторинг потоков</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 { color: #333; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #667eea;
+            color: white;
+        }
+        .metric {
+            display: inline-block;
+            margin: 10px 20px 10px 0;
+        }
+        .metric-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .metric-value {
+            font-size: 24px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .refresh-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .refresh-btn:hover {
+            background: #5568d3;
+        }
+        .state-running { color: #28a745; }
+        .state-waiting { color: #ffc107; }
+        .state-blocked { color: #dc3545; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📊 Мониторинг пулов потоков</h1>
+
+    <button class="refresh-btn" onclick="loadAllStats()">🔄 Обновить</button>
+    <label>
+        <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()">
+        Автообновление (каждую секунду)
+    </label>
+
+    <div class="card">
+        <h2>Reader Session Pool (Пул сессий читателей)</h2>
+        <div id="readerPoolStats"></div>
+    </div>
+
+    <div class="card">
+        <h2>Book Issue Pool (Пул выдачи книг)</h2>
+        <div id="bookIssueStats"></div>
+    </div>
+
+    <div class="card">
+        <h2>Активные потоки</h2>
+        <div id="activeThreads"></div>
+    </div>
+</div>
+
+<script>
+    let autoRefreshInterval = null;
+
+    function loadAllStats() {
+        loadReaderSessionStats();
+        loadBookIssueStats();
+        loadActiveThreads();
+    }
+
+    function loadReaderSessionStats() {
+        fetch('/api/admin/threads/reader-sessions')
+            .then(r => r.json())
+            .then(stats => {
+                document.getElementById('readerPoolStats').innerHTML = `
+                    <div class="metric">
+                        <div class="metric-label">Core Pool Size:</div>
+                        <div class="metric-value">${stats.corePoolSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Max Pool Size:</div>
+                        <div class="metric-value">${stats.maxPoolSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Active Threads:</div>
+                        <div class="metric-value">${stats.activeThreads}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Current Pool Size:</div>
+                        <div class="metric-value">${stats.poolSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Queue Size:</div>
+                        <div class="metric-value">${stats.queueSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Completed Tasks:</div>
+                        <div class="metric-value">${stats.completedTasks}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Total Tasks:</div>
+                        <div class="metric-value">${stats.totalTasks}</div>
+                    </div>
+                `;
+            });
+    }
+
+    function loadBookIssueStats() {
+        fetch('/api/admin/threads/book-issue')
+            .then(r => r.json())
+            .then(stats => {
+                document.getElementById('bookIssueStats').innerHTML = `
+                    <div class="metric">
+                        <div class="metric-label">Core Pool Size:</div>
+                        <div class="metric-value">${stats.corePoolSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Max Pool Size:</div>
+                        <div class="metric-value">${stats.maxPoolSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Active Threads:</div>
+                        <div class="metric-value">${stats.activeThreads}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Current Pool Size:</div>
+                        <div class="metric-value">${stats.poolSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Queue Size:</div>
+                        <div class="metric-value">${stats.queueSize}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Completed Tasks:</div>
+                        <div class="metric-value">${stats.completedTasks}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Total Tasks:</div>
+                        <div class="metric-value">${stats.totalTasks}</div>
+                    </div>
+                `;
+            });
+    }
+
+    function loadActiveThreads() {
+        fetch('/api/admin/threads/active')
+            .then(r => r.json())
+            .then(data => {
+                let html = `
+                    <p><strong>Всего активных потоков JVM:</strong> ${data.totalActiveThreads}</p>
+                    <p><strong>Наших потоков:</strong> ${data.ourThreadsCount}</p>
+                `;
+
+                if (data.ourThreads.length > 0) {
+                    html += `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Имя потока</th>
+                                    <th>Состояние</th>
+                                    <th>Приоритет</th>
+                                    <th>Активен</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    data.ourThreads.forEach(thread => {
+                        let stateClass = '';
+                        if (thread.state === 'RUNNABLE') stateClass = 'state-running';
+                        else if (thread.state.includes('WAITING')) stateClass = 'state-waiting';
+                        else if (thread.state === 'BLOCKED') stateClass = 'state-blocked';
+
+                        html += `
+                            <tr>
+                                <td>${thread.name}</td>
+                                <td class="${stateClass}">${thread.state}</td>
+                                <td>${thread.priority}</td>
+                                <td>${thread.isAlive ? '✅' : '❌'}</td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    html += '<p style="color: #999;">Нет активных потоков</p>';
+                }
+
+                document.getElementById('activeThreads').innerHTML = html;
+            });
+    }
+
+    function toggleAutoRefresh() {
+        const checkbox = document.getElementById('autoRefresh');
+        if (checkbox.checked) {
+            autoRefreshInterval = setInterval(loadAllStats, 1000);
+        } else {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+    }
+
+    // Загрузить при открытии страницы
+    loadAllStats();
+</script>
+</body>
+</html>

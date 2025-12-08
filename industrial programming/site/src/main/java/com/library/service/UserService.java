@@ -2,7 +2,11 @@ package com.library.service;
 
 import com.library.model.User;
 import com.library.model.UserRole;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -10,22 +14,39 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-public class UserService {
-    
-    @Autowired
-    private XmlService xmlService;
-    
-    @Autowired
-    private EncryptionService encryptionService;
-    
+public class UserService implements UserDetailsService {
+
+    private final XmlService xmlService;
+    private final PasswordEncoder passwordEncoder;
     private List<User> users;
-    
-    public UserService(XmlService xmlService, EncryptionService encryptionService) {
+
+    // Конструктор с параметрами - Spring автоматически инжектит зависимости
+    public UserService(XmlService xmlService, PasswordEncoder passwordEncoder) {
         this.xmlService = xmlService;
-        this.encryptionService = encryptionService;
+        this.passwordEncoder = passwordEncoder;
         this.users = xmlService.loadUsers();
     }
-    
+
+    /**
+     * Метод для Spring Security - загрузка пользователя по username
+     */
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        Optional<User> userOpt = getUserByUsername(username);
+        if (userOpt.isEmpty()) {
+            throw new UsernameNotFoundException("Пользователь не найден: " + username);
+        }
+
+        User user = userOpt.get();
+        String roleName = "ROLE_" + user.getRole().name(); // ROLE_LIBRARIAN или ROLE_READER
+
+        return org.springframework.security.core.userdetails.User.builder()
+                .username(user.getUsername())
+                .password(user.getPassword()) // Пароль уже захеширован
+                .authorities(new SimpleGrantedAuthority(roleName))
+                .build();
+    }
+
     /**
      * Регистрация нового пользователя
      */
@@ -34,34 +55,18 @@ public class UserService {
         if (users.stream().anyMatch(u -> u.getUsername().equals(username))) {
             return false;
         }
-        
+
         User user = new User();
         user.setUsername(username);
-        user.setPassword(encryptionService.hashPassword(password));
+        user.setPassword(passwordEncoder.encode(password)); // Используем BCrypt
         user.setFullName(fullName);
         user.setRole(role);
         user.setBorrowedBookIds(new ArrayList<>());
-        
         users.add(user);
         saveUsers();
         return true;
     }
-    
-    /**
-     * Аутентификация пользователя
-     */
-    public Optional<User> authenticate(String username, String password) {
-        Optional<User> user = users.stream()
-                .filter(u -> u.getUsername().equals(username))
-                .findFirst();
-        
-        if (user.isPresent() && encryptionService.verifyPassword(password, user.get().getPassword())) {
-            return user;
-        }
-        
-        return Optional.empty();
-    }
-    
+
     /**
      * Получить пользователя по username
      */
@@ -70,14 +75,14 @@ public class UserService {
                 .filter(u -> u.getUsername().equals(username))
                 .findFirst();
     }
-    
+
     /**
      * Получить всех пользователей (для библиотекаря)
      */
     public List<User> getAllUsers() {
         return new ArrayList<>(users);
     }
-    
+
     /**
      * Получить всех читателей
      */
@@ -90,7 +95,7 @@ public class UserService {
         }
         return readers;
     }
-    
+
     /**
      * Добавить выданную книгу в аккаунт читателя
      */
@@ -101,7 +106,7 @@ public class UserService {
             saveUsers();
         }
     }
-    
+
     /**
      * Вернуть книгу (удалить из списка выданных)
      */
@@ -112,14 +117,14 @@ public class UserService {
             saveUsers();
         }
     }
-    
+
     /**
      * Перезагрузить пользователей из XML
      */
     public void reloadUsers() {
         this.users = xmlService.loadUsers();
     }
-    
+
     private void saveUsers() {
         xmlService.saveUsers(users);
     }

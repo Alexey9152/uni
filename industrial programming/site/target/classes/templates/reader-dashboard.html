@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Читателя</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 24px; }
+        header a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            font-weight: 600;
+        }
+        header a:hover { text-decoration: underline; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ddd;
+        }
+        .nav-tabs button {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .nav-tabs button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .nav-tabs button:hover { color: #667eea; }
+        .tab-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        .tab-content.active { display: block; }
+        h2 { margin-bottom: 20px; color: #333; }
+        .btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        label { font-weight: 600; margin-bottom: 5px; }
+        input, select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th { background: #f0f0f0; padding: 12px; text-align: left; font-weight: 600; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background: #f9f9f9; }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #message { display: none; }
+        #error { display: none; }
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .search-form input,
+        .search-form button {
+            flex: 1;
+            min-width: 200px;
+        }
+        .order-status {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        .order-status h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        .order-status p {
+            margin-bottom: 10px;
+        }
+        .order-status strong {
+            color: #333;
+        }
+        .status-pending { color: #ffc107; }
+        .status-processing { color: #17a2b8; }
+        .status-completed { color: #28a745; }
+        .status-rejected { color: #dc3545; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>📚 Библиотека - Панель Читателя</h1>
+    <div>
+        <span th:text="'Пользователь: ' + ${username}"></span>
+        <a href="/logout">Выход</a>
+    </div>
+</header>
+
+<div class="container">
+    <div id="message" class="alert alert-success"></div>
+    <div id="error" class="alert alert-error"></div>
+
+    <div class="nav-tabs">
+        <button class="nav-btn active" data-tab="browse">Все книги</button>
+        <button class="nav-btn" data-tab="search">Поиск</button>
+        <button class="nav-btn" data-tab="order">Заказ книги</button>
+        <button class="nav-btn" data-tab="mybooks">Мои книги</button>
+        <button class="nav-btn" data-tab="account">Мой аккаунт</button>
+    </div>
+
+    <!-- Таб: Все книги -->
+    <div id="browse" class="tab-content active">
+        <h2>Все книги в библиотеке</h2>
+        <table id="allBooksTable">
+            <thead>
+            <tr>
+                <th>Название</th>
+                <th>Авторы</th>
+                <th>Год</th>
+                <th>Категория</th>
+                <th>В наличии</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Таб: Поиск -->
+    <div id="search" class="tab-content">
+        <h2>Поиск книг</h2>
+
+        <div class="search-form">
+            <input type="text" id="searchAuthor" placeholder="Поиск по автору">
+            <button class="btn" onclick="searchByAuthor()">Искать по автору</button>
+        </div>
+
+        <div class="search-form">
+            <input type="number" id="searchYear" placeholder="Год публикации">
+            <button class="btn" onclick="searchByYear()">Искать по году</button>
+        </div>
+
+        <div class="search-form">
+            <input type="text" id="searchCategory" placeholder="Категория">
+            <button class="btn" onclick="searchByCategory()">Искать по категории</button>
+        </div>
+
+        <table id="searchResultsTable">
+            <thead>
+            <tr>
+                <th>Название</th>
+                <th>Авторы</th>
+                <th>Год</th>
+                <th>Категория</th>
+                <th>В наличии</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Таб: Заказ книги -->
+    <div id="order" class="tab-content">
+        <h2>Заказать книгу</h2>
+
+        <div class="form-group">
+            <label for="orderCategory">Выберите категорию:</label>
+            <select id="orderCategory" onchange="searchBooksByCategory()">
+                <option value="">-- Все категории --</option>
+            </select>
+        </div>
+
+        <table id="orderBooksTable">
+            <thead>
+            <tr>
+                <th>Название</th>
+                <th>Авторы</th>
+                <th>Категория</th>
+                <th>В наличии</th>
+                <th>Действия</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div id="orderStatus" class="order-status">
+            <h3>Статус заказа</h3>
+            <p><strong>ID заказа:</strong> <span id="currentOrderId"></span></p>
+            <p><strong>Книга:</strong> <span id="currentOrderBook"></span></p>
+            <p><strong>Статус:</strong> <span id="currentOrderStatus" class="status-pending"></span></p>
+            <p><strong>Сообщение:</strong> <span id="currentOrderMessage"></span></p>
+        </div>
+    </div>
+
+    <!-- Таб: Мои книги -->
+    <div id="mybooks" class="tab-content">
+        <h2>Мои выданные книги</h2>
+        <table id="myBooksTable">
+            <thead>
+            <tr>
+                <th>Название</th>
+                <th>Авторы</th>
+                <th>Категория</th>
+                <th>Год</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Таб: Мой аккаунт -->
+    <div id="account" class="tab-content">
+        <h2>Информация об аккаунте</h2>
+        <div id="accountInfo"></div>
+    </div>
+</div>
+
+<script>
+    let currentOrderInterval = null;
+
+    // Переключение табов
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+            this.classList.add('active');
+            document.getElementById(this.dataset.tab).classList.add('active');
+
+            if (this.dataset.tab === 'browse') {
+                loadAllBooks();
+            }
+            if (this.dataset.tab === 'order') {
+                loadCategoriesForOrder();
+            }
+            if (this.dataset.tab === 'mybooks') {
+                loadMyBorrowedBooks();
+            }
+            if (this.dataset.tab === 'account') {
+                loadAccountInfo();
+            }
+        });
+    });
+
+    // Загрузить все книги
+    function loadAllBooks() {
+        fetch('/api/reader/books', { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => {
+                const tbody = document.querySelector('#allBooksTable tbody');
+                tbody.innerHTML = '';
+                books.forEach(book => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${book.title}</td>
+                        <td>${book.authors}</td>
+                        <td>${book.year}</td>
+                        <td>${book.category}</td>
+                        <td>${book.available}</td>
+                    `;
+                });
+            })
+            .catch(err => showError('Ошибка загрузки книг'));
+    }
+
+    // Поиск по автору
+    function searchByAuthor() {
+        const author = document.getElementById('searchAuthor').value;
+        if (!author) {
+            showError('Введите имя автора');
+            return;
+        }
+
+        fetch(`/api/reader/books/search/author?author=${encodeURIComponent(author)}`, { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => displaySearchResults(books))
+            .catch(err => showError('Ошибка поиска'));
+    }
+
+    // Поиск по году
+    function searchByYear() {
+        const year = document.getElementById('searchYear').value;
+        if (!year) {
+            showError('Введите год');
+            return;
+        }
+
+        fetch(`/api/reader/books/search/year?year=${year}`, { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => displaySearchResults(books))
+            .catch(err => showError('Ошибка поиска'));
+    }
+
+    // Поиск по категории
+    function searchByCategory() {
+        const category = document.getElementById('searchCategory').value;
+        if (!category) {
+            showError('Введите категорию');
+            return;
+        }
+
+        fetch(`/api/reader/books/search/category?category=${encodeURIComponent(category)}`, { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => displaySearchResults(books))
+            .catch(err => showError('Ошибка поиска'));
+    }
+
+    // Отобразить результаты поиска
+    function displaySearchResults(books) {
+        const tbody = document.querySelector('#searchResultsTable tbody');
+        tbody.innerHTML = '';
+
+        if (books.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">Книги не найдены</td></tr>';
+            return;
+        }
+
+        books.forEach(book => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td>${book.title}</td>
+                <td>${book.authors}</td>
+                <td>${book.year}</td>
+                <td>${book.category}</td>
+                <td>${book.available}</td>
+            `;
+        });
+    }
+
+    // Загрузить категории для заказа
+    function loadCategoriesForOrder() {
+        fetch('/api/reader/books', { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => {
+                const categories = [...new Set(books.map(b => b.category))];
+                const select = document.getElementById('orderCategory');
+                select.innerHTML = '<option value="">-- Все категории --</option>';
+                categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    select.appendChild(option);
+                });
+                searchBooksByCategory();
+            })
+            .catch(err => showError('Ошибка загрузки категорий'));
+    }
+
+    // Поиск книг по категории для заказа
+    function searchBooksByCategory() {
+        const category = document.getElementById('orderCategory').value;
+
+        let url = '/api/reader/books';
+        if (category) {
+            url = `/api/reader/books/search/category?category=${encodeURIComponent(category)}`;
+        }
+
+        fetch(url, { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => {
+                const tbody = document.querySelector('#orderBooksTable tbody');
+                tbody.innerHTML = '';
+
+                const availableBooks = books.filter(b => b.available > 0);
+
+                if (availableBooks.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">Нет доступных книг</td></tr>';
+                    return;
+                }
+
+                availableBooks.forEach(book => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${book.title}</td>
+                        <td>${book.authors}</td>
+                        <td>${book.category}</td>
+                        <td>${book.available}</td>
+                        <td>
+                            <button class="btn" onclick="orderBook('${book.id}', '${book.title.replace(/'/g, "\\'")}')">
+                                Заказать
+                            </button>
+                        </td>
+                    `;
+                });
+            })
+            .catch(err => showError('Ошибка загрузки книг'));
+    }
+
+    // Заказать книгу
+    function orderBook(bookId, bookTitle) {
+        if (!confirm(`Заказать книгу "${bookTitle}"?`)) {
+            return;
+        }
+
+        fetch(`/api/reader/order-book?bookId=${bookId}`, {
+            method: 'POST',
+            credentials: 'include'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+                return;
+            }
+
+            showMessage(data.message);
+            document.getElementById('currentOrderId').textContent = data.orderId;
+            document.getElementById('currentOrderBook').textContent = bookTitle;
+            document.getElementById('orderStatus').style.display = 'block';
+
+            startOrderTracking(data.orderId);
+        })
+        .catch(err => showError('Ошибка при создании заказа'));
+    }
+
+    // Отслеживание статуса заказа
+    function startOrderTracking(orderId) {
+        if (currentOrderInterval) {
+            clearInterval(currentOrderInterval);
+        }
+
+        currentOrderInterval = setInterval(() => {
+            fetch(`/api/reader/order-status/${orderId}`, { credentials: 'include' })
+                .then(r => r.json())
+                .then(order => {
+                    const statusSpan = document.getElementById('currentOrderStatus');
+                    statusSpan.textContent = order.status;
+                    statusSpan.className = `status-${order.status.toLowerCase()}`;
+                    document.getElementById('currentOrderMessage').textContent = order.message;
+
+                    if (order.status === 'COMPLETED' || order.status === 'REJECTED') {
+                        clearInterval(currentOrderInterval);
+                        searchBooksByCategory();
+
+                        if (order.status === 'COMPLETED') {
+                            showMessage('Книга успешно выдана! Проверьте раздел "Мои книги"');
+                        } else {
+                            showError('Заказ отклонен: ' + order.message);
+                        }
+                    }
+                })
+                .catch(err => {
+                    clearInterval(currentOrderInterval);
+                    showError('Ошибка отслеживания заказа');
+                });
+        }, 1000);
+    }
+
+    // Загрузить мои книги
+    function loadMyBorrowedBooks() {
+        fetch('/api/reader/borrowed-books', { credentials: 'include' })
+            .then(r => r.json())
+            .then(books => {
+                const tbody = document.querySelector('#myBooksTable tbody');
+                tbody.innerHTML = '';
+
+                if (books.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">У вас нет выданных книг</td></tr>';
+                    return;
+                }
+
+                books.forEach(book => {
+                    const row = tbody.insertRow();
+                    row.innerHTML = `
+                        <td>${book.title}</td>
+                        <td>${book.authors}</td>
+                        <td>${book.category}</td>
+                        <td>${book.year}</td>
+                    `;
+                });
+            })
+            .catch(err => showError('Ошибка загрузки выданных книг'));
+    }
+
+    // Загрузить информацию об аккаунте
+    function loadAccountInfo() {
+        fetch('/api/reader/account', { credentials: 'include' })
+            .then(r => r.json())
+            .then(user => {
+                const div = document.getElementById('accountInfo');
+                div.innerHTML = `
+                    <p><strong>Имя пользователя:</strong> ${user.username}</p>
+                    <p><strong>Полное имя:</strong> ${user.fullName}</p>
+                    <p><strong>Роль:</strong> ${user.role}</p>
+                    <p><strong>Выдано книг:</strong> ${user.borrowedBookIds.length}</p>
+                `;
+            })
+            .catch(err => showError('Ошибка загрузки информации об аккаунте'));
+    }
+
+    // Показать сообщение об успехе
+    function showMessage(msg) {
+        const el = document.getElementById('message');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    // Показать сообщение об ошибке
+    function showError(msg) {
+        const el = document.getElementById('error');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    // Загрузить все книги при открытии страницы
+    loadAllBooks();
+</script>
+</body>
+</html>

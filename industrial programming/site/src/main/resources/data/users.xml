@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<users>
+  <user>
+    <username>ad</username>
+    <password>$2a$10$0o9hnHliFB7FhyfGDDlA9OwZBoUyFuwBttfRQulTnM4cLQyVcwtHO</password>
+    <fullName>q</fullName>
+    <role>READER</role>
+    <borrowedBooks>
+      <borrowedBook>2</borrowedBook>
+      <borrowedBook>1</borrowedBook>
+      <borrowedBook>1</borrowedBook>
+      <borrowedBook>4</borrowedBook>
+      <borrowedBook>2</borrowedBook>
+    </borrowedBooks>
+  </user>
+  <user>
+    <username>b</username>
+    <password>$2a$10$kAGkNk1jZ9LqglstCBAgfuk2KU2jnGBNEkhwYu6F2N9Bu5ylxmecG</password>
+    <fullName>as</fullName>
+    <role>LIBRARIAN</role>
+    <borrowedBooks/>
+  </user>
+  <user>
+    <username>losread</username>
+    <password>$2a$10$scK2iAZgCLlAVvosfUfpA.xmTXfMv4R5xJATCoCglw9MdmUbbt3GC</password>
+    <fullName>Лось Алексей</fullName>
+    <role>READER</role>
+    <borrowedBooks>
+      <borrowedBook>1</borrowedBook>
+      <borrowedBook>1</borrowedBook>
+    </borrowedBooks>
+  </user>
+</users>
