@@ -21,8 +21,6 @@ LockManager g_lockManager;
 std::mutex  g_fileMutex;
 std::atomic<bool> g_serverRunning{true};
 std::string g_filename;
-
-// Чтение записи по ID из бинарного файла
 bool readEmployeeById(int id, employee &out) {
     std::lock_guard<std::mutex> lock(g_fileMutex);
     std::ifstream in(g_filename, std::ios::binary);
@@ -37,7 +35,6 @@ bool readEmployeeById(int id, employee &out) {
     return false;
 }
 
-// Перезапись записи по ID в бинарном файле
 bool writeEmployeeById(int id, const employee &src) {
     std::lock_guard<std::mutex> lock(g_fileMutex);
     std::fstream io(g_filename, std::ios::binary | std::ios::in | std::ios::out);
@@ -56,15 +53,14 @@ bool writeEmployeeById(int id, const employee &src) {
     return false;
 }
 
-// Печать всего файла на консоль
 void printFile() {
     std::lock_guard<std::mutex> lock(g_fileMutex);
     std::ifstream in(g_filename, std::ios::binary);
     if (!in) {
-        std::cout << "Не удалось открыть файл.\n";
+        std::cout << "┬Н┬е ├г┬д┬а┬л┬о├б├м ┬о├в┬к├а├л├в├м ├д┬а┬й┬л.\n";
         return;
     }
-    std::cout << "Содержимое файла:\n";
+    std::cout << "тАШ┬о┬д┬е├а┬ж┬и┬м┬о┬е ├д┬а┬й┬л┬а:\n";
     employee e{};
     while (in.read(reinterpret_cast<char*>(&e), sizeof(e))) {
         std::cout << "ID: "   << e.num
@@ -85,21 +81,19 @@ bool recvRequest(HANDLE pipe, Request &req) {
     return ok && read == sizeof(req);
 }
 
-// Обработчик одного клиентского подключения
 void clientThread(HANDLE pipe) {
     while (g_serverRunning) {
         Request req{};
         if (!recvRequest(pipe, req)) {
-            break; // клиент отключился
+            break; 
         }
 
         Response resp{};
         resp.ok = false;
-        std::snprintf(resp.message, sizeof(resp.message), "Ошибка");
+        std::snprintf(resp.message, sizeof(resp.message), "┼╜├и┬и┬б┬к┬а");
 
         switch (req.op) {
         case Operation::READ_REQUEST: {
-            // захват блокировки чтения (читатели совместимы, писатель блокирует)
             while (!g_lockManager.acquireRead(req.id) && g_serverRunning) {
                 Sleep(10);
             }
@@ -116,7 +110,6 @@ void clientThread(HANDLE pipe) {
             break;
         }
         case Operation::WRITE_BEGIN: {
-            // захват блокировки записи (эксклюзивный доступ)
             while (!g_lockManager.acquireWrite(req.id) && g_serverRunning) {
                 Sleep(10);
             }
@@ -144,7 +137,6 @@ void clientThread(HANDLE pipe) {
             break;
         }
         case Operation::RELEASE: {
-            // Освобождаем возможную блокировку чтения и/или записи
             g_lockManager.releaseWrite(req.id);
             g_lockManager.releaseRead(req.id);
             resp.ok = true;
@@ -171,22 +163,22 @@ void clientThread(HANDLE pipe) {
 }
 
 int main() {
-    std::cout << "Введите имя бинарного файла: ";
+    std::cout << "тАЪ┬в┬е┬д┬и├в┬е ┬и┬м├п ┬б┬и┬н┬а├а┬н┬о┬г┬о ├д┬а┬й┬л┬а: ";
     std::cin >> g_filename;
 
     int n;
     while (true) {
-    std::cout << "Введите количество сотрудников (> 0): ";
+    std::cout << "тАЪ┬в┬е┬д┬и├в┬е ┬к┬о┬л┬и├з┬е├б├в┬в┬о ├б┬о├в├а├г┬д┬н┬и┬к┬о┬в (> 0): ";
     std::cin >> n;
 
     if (!std::cin) {
         std::cin.clear();
         std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
-        std::cout << "Ошибка ввода. Нужно целое число.\n";
+        std::cout << "┼╜├и┬и┬б┬к┬а ┬в┬в┬о┬д┬а. ┬Н├г┬ж┬н┬о ├ж┬е┬л┬о┬е ├з┬и├б┬л┬о.\n";
         continue;
     }
     if (n <= 0) {
-        std::cout << "Количество сотрудников должно быть больше 0.\n";
+        std::cout << "┼а┬о┬л┬и├з┬е├б├в┬в┬о ├б┬о├в├а├г┬д┬н┬и┬к┬о┬в ┬д┬о┬л┬ж┬н┬о ┬б├л├в├м ┬б┬о┬л├м├и┬е 0.\n";
         continue;
     }
     break;
@@ -195,27 +187,25 @@ int main() {
     {
         std::ofstream out(g_filename, std::ios::binary);
         if (!out) {
-            std::cerr << "Не удалось создать файл.\n";
+            std::cerr << "┬Н┬е ├г┬д┬а┬л┬о├б├м ├б┬о┬з┬д┬а├в├м ├д┬а┬й┬л.\n";
             return 1;
         }
         for (int i = 0; i < n; ++i) {
             employee e{};
-            e.num = i + 1; // ID назначается автоматически
+            e.num = i + 1;
 
-            std::cout << "Сотрудник #" << (i + 1) << " (name, hours>=0): ";
+            std::cout << "тАШ┬о├в├а├г┬д┬н┬и┬к #" << (i + 1) << " (name, hours>=0): ";
             std::cin >> e.name;
-
-            // Валидация количества часов: неотрицательное double
             while (true) {
                 std::cin >> e.hours;
                 if (!std::cin) {
                     std::cin.clear();
                     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                    std::cout << "Ошибка ввода. Введите количество часов (>= 0): ";
+                    std::cout << "┼╜├и┬и┬б┬к┬а ┬в┬в┬о┬д┬а. тАЪ┬в┬е┬д┬и├в┬е ┬к┬о┬л┬и├з┬е├б├в┬в┬о ├з┬а├б┬о┬в (>= 0): ";
                     continue;
                 }
                 if (e.hours < 0.0) {
-                    std::cout << "Часы не могут быть отрицательными. Введите заново (>= 0): ";
+                    std::cout << "тАФ┬а├б├л ┬н┬е ┬м┬о┬г├г├в ┬б├л├в├м ┬о├в├а┬и├ж┬а├в┬е┬л├м┬н├л┬м┬и. тАЪ┬в┬е┬д┬и├в┬е ┬з┬а┬н┬о┬в┬о (>= 0): ";
                     continue;
                 }
                 break;
@@ -227,20 +217,19 @@ int main() {
 
     printFile();
 
-    // Запуск клиентских процессов
     int clientCount = 0;
     while (true) {
-    std::cout << "Введите количество клиентских процессов (> 0): ";
+    std::cout << "тАЪ┬в┬е┬д┬и├в┬е ┬к┬о┬л┬и├з┬е├б├в┬в┬о ┬к┬л┬и┬е┬н├в├б┬к┬и├е ┬п├а┬о├ж┬е├б├б┬о┬в (> 0): ";
     std::cin >> clientCount;
 
     if (!std::cin) {
         std::cin.clear();
         std::cin.ignore((std::numeric_limits<std::streamsize>::max)(), '\n');
-        std::cout << "Ошибка ввода. Нужно целое число.\n";
+        std::cout << "┼╜├и┬и┬б┬к┬а ┬в┬в┬о┬д┬а. ┬Н├г┬ж┬н┬о ├ж┬е┬л┬о┬е ├з┬и├б┬л┬о.\n";
         continue;
     }
     if (clientCount <= 0) {
-        std::cout << "Количество клиентов должно быть больше 0.\n";
+        std::cout << "┼а┬о┬л┬и├з┬е├б├в┬в┬о ┬к┬л┬и┬е┬н├в┬о┬в ┬д┬о┬л┬ж┬н┬о ┬б├л├в├м ┬б┬о┬л├м├и┬е 0.\n";
         continue;
     }
     break;
@@ -261,36 +250,33 @@ int main() {
         nullptr,              // lpProcessAttributes
         nullptr,              // lpThreadAttributes
         FALSE,                // bInheritHandles
-        CREATE_NEW_CONSOLE,   // dwCreationFlags  <<< ВАЖНО
+        CREATE_NEW_CONSOLE,   // dwCreationFlags  <<< тАЪтВмтАа┬Н┼╜
         nullptr,              // lpEnvironment
         nullptr,              // lpCurrentDirectory
         &si,
         &pi
     );
     if (!ok) {
-        std::cerr << "Не удалось запустить client.exe, код ошибки: "
+        std::cerr << "┬Н┬е ├г┬д┬а┬л┬о├б├м ┬з┬а┬п├г├б├в┬и├в├м client.exe, ┬к┬о┬д ┬о├и┬и┬б┬к┬и: "
                   << GetLastError() << "\n";
     } else {
         clientProcesses.push_back(pi);
-        std::cout << "Клиент #" << (i + 1) << " запущен.\n";
+        std::cout << "┼а┬л┬и┬е┬н├в #" << (i + 1) << " ┬з┬а┬п├г├й┬е┬н.\n";
     }
 }
 
-    std::cout << "Сервер запущен. Ожидание клиентов...\n";
+    std::cout << "тАШ┬е├а┬в┬е├а ┬з┬а┬п├г├й┬е┬н. ┼╜┬ж┬и┬д┬а┬н┬и┬е ┬к┬л┬и┬е┬н├в┬о┬в...\n";
 
-    // Поток для команд с консоли: печать файла / завершение
     std::thread consoleThread([] {
     while (g_serverRunning) {
-        std::cout << "Команды сервера: p - print file, q - quit\n";
+        std::cout << "┼а┬о┬м┬а┬н┬д├л ├б┬е├а┬в┬е├а┬а: p - print file, q - quit\n";
         char cmd;
         std::cin >> cmd;
         if (cmd == 'p') {
             printFile();
         } else if (cmd == 'q') {
-            // Сигнал остановки сервера
             g_serverRunning = false;
 
-            // Фиктивное подключение к каналу, чтобы разбудить ConnectNamedPipe
             HANDLE h = CreateFileW(
                 PIPE_NAME,
                 GENERIC_READ | GENERIC_WRITE,
@@ -311,7 +297,6 @@ int main() {
 
     std::vector<std::thread> workers;
 
-    // Главный цикл: создавать новые экземпляры канала и принимать клиентов
     while (g_serverRunning) {
         HANDLE pipe = CreateNamedPipeW(
             PIPE_NAME,
@@ -339,13 +324,10 @@ int main() {
         }
     }
 
-    // Дожидаемся завершения потоков
     for (auto &t : workers) {
         if (t.joinable()) t.join();
     }
     if (consoleThread.joinable()) consoleThread.join();
-
-    // Дожидаемся завершения клиентских процессов
     for (auto &pi : clientProcesses) {
         if (pi.hProcess) {
             WaitForSingleObject(pi.hProcess, INFINITE);
@@ -356,9 +338,9 @@ int main() {
         }
     }
 
-    std::cout << "Итоговое содержимое файла:\n";
+    std::cout << "╦Ж├в┬о┬г┬о┬в┬о┬е ├б┬о┬д┬е├а┬ж┬и┬м┬о┬е ├д┬а┬й┬л┬а:\n";
     printFile();
 
-    std::cout << "Сервер завершён.\n";
+    std::cout << "тАШ┬е├а┬в┬е├а ┬з┬а┬в┬е├а├и├▒┬н.\n";
     return 0;
 }
