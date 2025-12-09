@@ -1,269 +1,172 @@
 #include "marker_thread.h"
-#include <cstring>
 #include <iostream>
+#include <boost/interprocess/file_mapping.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
 
-// статика
-HANDLE SharedFile::fileHandle = INVALID_HANDLE_VALUE;
-HANDLE SharedFile::mapHandle = NULL;
-HANDLE SharedFile::mutex = NULL;
-HANDLE SharedFile::freeSlotsSem = NULL;
-HANDLE SharedFile::usedSlotsSem = NULL;
+namespace bip = boost::interprocess;
+
+std::string SharedFile::mapped_name;
+std::unique_ptr<bip::managed_mapped_file> SharedFile::segment;
 MessageQueue* SharedFile::sharedQueue = nullptr;
-std::string SharedFile::currentFilename = "";
-int SharedFile::queue_max_messages = 0;
-
-std::string SharedFile::makeName(const std::string& base,
-                                 const std::string& suffix) {
-    return "Global\\" + base + "_" + suffix;
-}
 
 bool SharedFile::create(const std::string& filename, int max_messages) {
-    currentFilename = filename;
-    queue_max_messages = max_messages;
+    mapped_name = filename;
 
-    // мьютекс для защиты очереди
-    mutex = CreateMutexA(nullptr, FALSE, makeName(filename, "mutex").c_str());
-    if (!mutex) return false;
+    // Удаляем старый файл, если есть
+    bip::file_mapping::remove(mapped_name.c_str()); // [web:229]
 
-    // семафор свободных слотов (начальное значение = max_messages)
-    freeSlotsSem = CreateSemaphoreA(nullptr,
-                                    max_messages,   // initial count
-                                    max_messages,   // max count
-                                    makeName(filename, "free").c_str());
-    if (!freeSlotsSem) return false;
+    try {
+        std::size_t size = sizeof(MessageQueue) + 4096;
 
-    // семафор занятых слотов (initial = 0)
-    usedSlotsSem = CreateSemaphoreA(nullptr,
-                                    0,              // initial
-                                    max_messages,   // max
-                                    makeName(filename, "used").c_str());
-    if (!usedSlotsSem) return false;
+        segment = std::make_unique<bip::managed_mapped_file>(
+            bip::create_only,
+            mapped_name.c_str(),
+            size
+        );
 
-    // файл + mmap
-    DWORD access = GENERIC_READ | GENERIC_WRITE;
-    fileHandle = CreateFileA(filename.c_str(), access,
-                             FILE_SHARE_READ | FILE_SHARE_WRITE,
-                             nullptr,
-                             CREATE_ALWAYS,
-                             FILE_ATTRIBUTE_NORMAL,
-                             nullptr);
-    if (fileHandle == INVALID_HANDLE_VALUE) return false;
-
-    mapHandle = CreateFileMappingA(fileHandle, nullptr,
-                                   PAGE_READWRITE,
-                                   0, sizeof(MessageQueue),
-                                   nullptr);
-    if (!mapHandle) return false;
-
-    sharedQueue = static_cast<MessageQueue*>(
-        MapViewOfFile(mapHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MessageQueue)));
-    if (!sharedQueue) return false;
-
-    // инициализация очереди
-    sharedQueue->max_messages = max_messages;
-    sharedQueue->read_pos = 0;
-    sharedQueue->write_pos = 0;
-    sharedQueue->count = 0;
-    sharedQueue->sender_ready_count = 0;
-    for (int i = 0; i < max_messages; ++i) {
-        std::memset(sharedQueue->messages[i], 0, 20);
+        // ОДИН объект очереди в сегменте
+        sharedQueue = segment->construct<MessageQueue>("Queue")(max_messages);
+        return sharedQueue != nullptr;
+    } catch (const std::exception& ex) {
+        std::cerr << "SharedFile::create exception: " << ex.what() << "\n";
+        segment.reset();
+        sharedQueue = nullptr;
+        return false;
     }
-
-    return true;
 }
 
 bool SharedFile::open(const std::string& filename) {
-    currentFilename = filename;
+    mapped_name = filename;
 
-    mutex = OpenMutexA(MUTEX_ALL_ACCESS, FALSE,
-                       makeName(filename, "mutex").c_str());
-    if (!mutex) return false;
+    try {
+        segment = std::make_unique<bip::managed_mapped_file>(
+            bip::open_only,
+            mapped_name.c_str()
+        );
 
-    freeSlotsSem = OpenSemaphoreA(SEMAPHORE_ALL_ACCESS, FALSE,
-                                  makeName(filename, "free").c_str());
-    if (!freeSlotsSem) return false;
-
-    usedSlotsSem = OpenSemaphoreA(SEMAPHORE_ALL_ACCESS, FALSE,
-                                  makeName(filename, "used").c_str());
-    if (!usedSlotsSem) return false;
-
-    fileHandle = CreateFileA(filename.c_str(),
-                             GENERIC_READ | GENERIC_WRITE,
-                             FILE_SHARE_READ | FILE_SHARE_WRITE,
-                             nullptr,
-                             OPEN_EXISTING,
-                             FILE_ATTRIBUTE_NORMAL,
-                             nullptr);
-    if (fileHandle == INVALID_HANDLE_VALUE) return false;
-
-    mapHandle = CreateFileMappingA(fileHandle, nullptr,
-                                   PAGE_READWRITE,
-                                   0, sizeof(MessageQueue),
-                                   nullptr);
-    if (!mapHandle) return false;
-
-    sharedQueue = static_cast<MessageQueue*>(
-        MapViewOfFile(mapHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MessageQueue)));
-    if (!sharedQueue) return false;
-
-    queue_max_messages = sharedQueue->max_messages;
-    return true;
+        auto res = segment->find<MessageQueue>("Queue");
+        sharedQueue = res.first;
+        return sharedQueue != nullptr;
+    } catch (const std::exception& ex) {
+        std::cerr << "SharedFile::open exception: " << ex.what() << "\n";
+        segment.reset();
+        sharedQueue = nullptr;
+        return false;
+    }
 }
 
 bool SharedFile::writeMessage(const std::string& message) {
     if (!sharedQueue || message.length() >= 20) return false;
 
-    // 1) ждём свободный слот
-    if (WaitForSingleObject(freeSlotsSem, INFINITE) != WAIT_OBJECT_0)
-        return false;
+    // 1) Ждём свободный слот (если очередь полна — блокируемся)
+    sharedQueue->free_slots.wait(); // [web:215]
 
-    // 2) критическая секция над структурой очереди
-    WaitForSingleObject(mutex, INFINITE);
+    {
+        // 2) Критическая секция
+        bip::scoped_lock<bip::interprocess_mutex> lock(sharedQueue->mutex);
 
-    // (доп. защита от гонок: очередь вдруг оказалась переполнена)
-    if (sharedQueue->count >= sharedQueue->max_messages) {
-        ReleaseMutex(mutex);
-        ReleaseSemaphore(freeSlotsSem, 1, nullptr); // вернуть слот
-        return false;
+        int pos = sharedQueue->write_pos;
+        std::strncpy(sharedQueue->messages[pos], message.c_str(), 19);
+        sharedQueue->messages[pos][19] = '\0';
+
+        sharedQueue->write_pos =
+            (sharedQueue->write_pos + 1) % sharedQueue->max_messages;
+        sharedQueue->count++;
     }
 
-    std::strncpy(sharedQueue->messages[sharedQueue->write_pos],
-                 message.c_str(), 19);
-    sharedQueue->messages[sharedQueue->write_pos][19] = '\0';
-    sharedQueue->write_pos =
-        (sharedQueue->write_pos + 1) % sharedQueue->max_messages;
-    sharedQueue->count++;
+    // 3) Сообщаем receiver'у, что появилось сообщение
+    sharedQueue->used_slots.post();
+    return true;
+}
 
-    ReleaseMutex(mutex);
+bool SharedFile::tryWriteMessage(const std::string& message) {
+    if (!sharedQueue || message.length() >= 20) return false;
 
-    // 3) сообщаем receiver'у, что появилось одно сообщение
-    ReleaseSemaphore(usedSlotsSem, 1, nullptr);
+    // Неблокирующая попытка
+    if (!sharedQueue->free_slots.try_wait())
+        return false; // слотов нет — очередь заполнена
 
+    {
+        bip::scoped_lock<bip::interprocess_mutex> lock(sharedQueue->mutex);
+
+        int pos = sharedQueue->write_pos;
+        std::strncpy(sharedQueue->messages[pos], message.c_str(), 19);
+        sharedQueue->messages[pos][19] = '\0';
+
+        sharedQueue->write_pos =
+            (sharedQueue->write_pos + 1) % sharedQueue->max_messages;
+        sharedQueue->count++;
+    }
+
+    sharedQueue->used_slots.post();
     return true;
 }
 
 bool SharedFile::readMessage(std::string& message) {
     if (!sharedQueue) return false;
 
-    // 1) ждём хотя бы одно сообщение
-    if (WaitForSingleObject(usedSlotsSem, INFINITE) != WAIT_OBJECT_0)
-        return false;
+    // 1) Ждём сообщение (если пусто — блокируемся)
+    sharedQueue->used_slots.wait();
 
-    // 2) критическая секция
-    WaitForSingleObject(mutex, INFINITE);
+    {
+        bip::scoped_lock<bip::interprocess_mutex> lock(sharedQueue->mutex);
 
-    if (sharedQueue->count == 0) {
-        ReleaseMutex(mutex);
-        ReleaseSemaphore(freeSlotsSem, 1, nullptr); // вернуть слот
-        return false;
+        int pos = sharedQueue->read_pos;
+        message = sharedQueue->messages[pos];
+
+        sharedQueue->read_pos =
+            (sharedQueue->read_pos + 1) % sharedQueue->max_messages;
+        sharedQueue->count--;
     }
 
-    message = sharedQueue->messages[sharedQueue->read_pos];
-    sharedQueue->read_pos =
-        (sharedQueue->read_pos + 1) % sharedQueue->max_messages;
-    sharedQueue->count--;
-
-    ReleaseMutex(mutex);
-
-    // 3) сообщаем sender'ам, что освободился один слот
-    ReleaseSemaphore(freeSlotsSem, 1, nullptr);
-
-    return true;
-}
-
-void SharedFile::markSenderReady() {
-    if (!sharedQueue) return;
-    WaitForSingleObject(mutex, INFINITE);
-    sharedQueue->sender_ready_count++;
-    ReleaseMutex(mutex);
-}
-
-int SharedFile::getSenderReadyCount() {
-    if (!sharedQueue) return 0;
-    WaitForSingleObject(mutex, INFINITE);
-    int v = sharedQueue->sender_ready_count;
-    ReleaseMutex(mutex);
-    return v;
-}
-
-void SharedFile::close() {
-    if (mutex) { CloseHandle(mutex); mutex = NULL; }
-    if (freeSlotsSem) { CloseHandle(freeSlotsSem); freeSlotsSem = NULL; }
-    if (usedSlotsSem) { CloseHandle(usedSlotsSem); usedSlotsSem = NULL; }
-    if (sharedQueue) { UnmapViewOfFile(sharedQueue); sharedQueue = nullptr; }
-    if (mapHandle) { CloseHandle(mapHandle); mapHandle = NULL; }
-    if (fileHandle != INVALID_HANDLE_VALUE) {
-        CloseHandle(fileHandle);
-        fileHandle = INVALID_HANDLE_VALUE;
-    }
-}
-bool SharedFile::tryWriteMessage(const std::string& message) {
-    if (!sharedQueue || message.length() >= 20) return false;
-
-    // Пытаемся взять семафор свободных слотов без ожидания
-    DWORD res = WaitForSingleObject(freeSlotsSem, 0);
-    if (res == WAIT_TIMEOUT) {
-        return false; // очередь полна, свободных слотов нет
-    }
-    if (res != WAIT_OBJECT_0) {
-        return false; // ошибка ожидания
-    }
-
-    // Критическая секция над очередью
-    WaitForSingleObject(mutex, INFINITE);
-
-    if (sharedQueue->count >= sharedQueue->max_messages) {
-        // Переполнение на всякий случай – вернуть слот
-        ReleaseMutex(mutex);
-        ReleaseSemaphore(freeSlotsSem, 1, nullptr);
-        return false;
-    }
-
-    std::strncpy(sharedQueue->messages[sharedQueue->write_pos],
-                 message.c_str(), 19);
-    sharedQueue->messages[sharedQueue->write_pos][19] = '\0';
-    sharedQueue->write_pos =
-        (sharedQueue->write_pos + 1) % sharedQueue->max_messages;
-    sharedQueue->count++;
-
-    ReleaseMutex(mutex);
-
-    // Сигнал Receiver’у, что появилось сообщение
-    ReleaseSemaphore(usedSlotsSem, 1, nullptr);
-
+    // 3) Освобождаем один слот
+    sharedQueue->free_slots.post();
     return true;
 }
 
 bool SharedFile::tryReadMessage(std::string& message) {
     if (!sharedQueue) return false;
 
-    // Пытаемся взять семафор занятых слотов без ожидания
-    DWORD res = WaitForSingleObject(usedSlotsSem, 0);
-    if (res == WAIT_TIMEOUT) {
+    // Неблокирующая попытка
+    if (!sharedQueue->used_slots.try_wait())
         return false; // сообщений нет
-    }
-    if (res != WAIT_OBJECT_0) {
-        return false; // ошибка ожидания
-    }
 
-    // Критическая секция
-    WaitForSingleObject(mutex, INFINITE);
+    {
+        bip::scoped_lock<bip::interprocess_mutex> lock(sharedQueue->mutex);
 
-    if (sharedQueue->count == 0) {
-        ReleaseMutex(mutex);
-        ReleaseSemaphore(freeSlotsSem, 1, nullptr);
-        return false;
+        int pos = sharedQueue->read_pos;
+        message = sharedQueue->messages[pos];
+
+        sharedQueue->read_pos =
+            (sharedQueue->read_pos + 1) % sharedQueue->max_messages;
+        sharedQueue->count--;
     }
 
-    message = sharedQueue->messages[sharedQueue->read_pos];
-    sharedQueue->read_pos =
-        (sharedQueue->read_pos + 1) % sharedQueue->max_messages;
-    sharedQueue->count--;
-
-    ReleaseMutex(mutex);
-
-    // Сигнал Sender’ам: освободился слот
-    ReleaseSemaphore(freeSlotsSem, 1, nullptr);
-
+    sharedQueue->free_slots.post();
     return true;
+}
+
+void SharedFile::markSenderReady() {
+    if (!sharedQueue) return;
+    bip::scoped_lock<bip::interprocess_mutex> lock(sharedQueue->mutex);
+    sharedQueue->sender_ready_count++;
+}
+
+int SharedFile::getSenderReadyCount() {
+    if (!sharedQueue) return 0;
+    bip::scoped_lock<bip::interprocess_mutex> lock(sharedQueue->mutex);
+    return sharedQueue->sender_ready_count;
+}
+
+void SharedFile::close() {
+    if (segment && sharedQueue) {
+        try {
+            segment->destroy<MessageQueue>("Queue");
+        } catch (...) {
+            // игнорируем
+        }
+    }
+    segment.reset();
+    sharedQueue = nullptr;
+    // bip::file_mapping::remove(mapped_name.c_str()); // по желанию
 }
