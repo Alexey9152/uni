@@ -1,0 +1,62 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: todo-gateway
+  data:
+    redis:
+      host: redis
+      port: 6379
+  cloud:
+    gateway:
+      routes:
+        - id: todo-api
+          uri: http://todo-api:8080
+          predicates:
+            - Path=/tasks/**
+          filters:
+            - name: Retry
+              args:
+                retries: 3
+                methods: GET,POST,PUT,PATCH,DELETE
+                series: SERVER_ERROR
+                exceptions:
+                    - java.io.IOException
+                    - java.util.concurrent.TimeoutException
+                backoff:
+                    firstBackoff: 50ms
+                    maxBackoff: 500ms
+                    factor: 2
+                timeout: 1s
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@apiKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: todoApiCb
+                fallbackUri: forward:/fallback/todo-api
+resilience4j:
+  circuitbreaker:
+    instances:
+      todoApiCb:
+        slidingWindowSize: 20
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+  timelimiter:
+    instances:
+      todoApiCb:
+        timeoutDuration: 1s
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+

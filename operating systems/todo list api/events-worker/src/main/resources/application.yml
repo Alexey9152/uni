@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: events-worker
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: todo
+    password: todo
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

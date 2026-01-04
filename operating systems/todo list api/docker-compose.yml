@@ -1,7 +1,21 @@
-
-
 services:
-  # PostgreSQL база данных
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: todo-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: todo
+      RABBITMQ_DEFAULT_PASS: todo
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - todo-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   postgres:
     image: postgres:15-alpine
     container_name: todo-postgres
@@ -21,7 +35,6 @@ services:
     networks:
       - todo-network
 
-  # Redis кеш
   redis:
     image: redis:7-alpine
     container_name: todo-redis
@@ -37,9 +50,10 @@ services:
     networks:
       - todo-network
 
-  # Spring Boot API
   todo-api:
-    build: .
+    build:
+      context: .
+      dockerfile: todo-api/Dockerfile
     container_name: todo-api
     ports:
       - "8081:8080"
@@ -49,14 +63,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: password
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: todo
+      SPRING_RABBITMQ_PASSWORD: todo
       SPRING_PROFILES_ACTIVE: docker
     depends_on:
+      rabbitmq:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # ВАЖНО: healthcheck выполняется внутри контейнера, утилита должна быть в образе.
+    # Если в образе нет curl — используй wget (или установи curl в Dockerfile).
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:8080/actuator/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -64,7 +85,21 @@ services:
     networks:
       - todo-network
 
-  # Prometheus (сбор метрик)
+  events-worker:
+    build:
+      context: .
+      dockerfile: events-worker/Dockerfile
+    container_name: todo-events-worker
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: todo
+      SPRING_RABBITMQ_PASSWORD: todo
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - todo-network
+
   prometheus:
     image: prom/prometheus:latest
     container_name: todo-prometheus
@@ -74,12 +109,11 @@ services:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
     networks:
       - todo-network
 
-  # Grafana (визуализация метрик)
   grafana:
     image: grafana/grafana:latest
     container_name: todo-grafana
@@ -97,13 +131,9 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
   prometheus_data:
-    driver: local
   grafana_data:
-    driver: local
 
 networks:
   todo-network:
