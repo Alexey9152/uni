@@ -1,0 +1,92 @@
+{
+  "uid": "todo-observability",
+  "title": "Todo: Gateway + API",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "tags": ["todo", "spring", "prometheus"],
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "type": "datasource",
+        "name": "DS_PROMETHEUS",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Gateway RPS by routeId",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (routeId) (rate(spring_cloud_gateway_requests_seconds_count{job=\"gateway\"}[1m]))",
+          "legendFormat": "{{routeId}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Gateway avg latency (ms)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (rate(spring_cloud_gateway_requests_seconds_sum{job=\"gateway\"}[1m]) / rate(spring_cloud_gateway_requests_seconds_count{job=\"gateway\"}[1m]))",
+          "legendFormat": "avg"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Todo-API RPS (all endpoints)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"todo-api\"}[1m]))",
+          "legendFormat": "rps"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Todo-API avg latency (ms)",
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1000 * (rate(http_server_requests_seconds_sum{job=\"todo-api\"}[1m]) / rate(http_server_requests_seconds_count{job=\"todo-api\"}[1m]))",
+          "legendFormat": "avg"
+        }
+      ]
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

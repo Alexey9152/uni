@@ -1,4 +1,76 @@
 services:
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: todo-gateway
+    ports:
+      - "8080:8080"      # наружу только gateway
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      redis:
+        condition: service_healthy
+      todo-api:
+        condition: service_healthy
+    networks:
+      - todo-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  todo-api:
+    build:
+      context: .
+      dockerfile: todo-api/Dockerfile
+    container_name: todo-api
+    expose:
+      - "8080"            # только внутренняя сеть (не публикуем на host) [web:1231]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/todo_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: todo
+      SPRING_RABBITMQ_PASSWORD: todo
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - todo-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  events-worker:
+    build:
+      context: .
+      dockerfile: events-worker/Dockerfile
+    container_name: todo-events-worker
+    environment:
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: todo
+      SPRING_RABBITMQ_PASSWORD: todo
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - todo-network
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: todo-rabbitmq
@@ -23,6 +95,7 @@ services:
       POSTGRES_DB: todo_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+    # (опционально) для "идеала" можно убрать ports, но оставляю как было для удобства локальной отладки
     ports:
       - "5432:5432"
     volumes:
@@ -38,6 +111,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: todo-redis
+    # (опционально) для "идеала" можно убрать ports
     ports:
       - "6379:6379"
     volumes:
@@ -50,80 +124,44 @@ services:
     networks:
       - todo-network
 
-  todo-api:
-    build:
-      context: .
-      dockerfile: todo-api/Dockerfile
-    container_name: todo-api
-    ports:
-      - "8081:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/todo_db
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PORT: 6379
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_USERNAME: todo
-      SPRING_RABBITMQ_PASSWORD: todo
-      SPRING_PROFILES_ACTIVE: docker
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    # ВАЖНО: healthcheck выполняется внутри контейнера, утилита должна быть в образе.
-    # Если в образе нет curl — используй wget (или установи curl в Dockerfile).
-    healthcheck:
-      test: ["CMD-SHELL", "wget -nv -t1 --spider http://localhost:8080/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - todo-network
-
-  events-worker:
-    build:
-      context: .
-      dockerfile: events-worker/Dockerfile
-    container_name: todo-events-worker
-    environment:
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_USERNAME: todo
-      SPRING_RABBITMQ_PASSWORD: todo
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - todo-network
-
   prometheus:
     image: prom/prometheus:latest
     container_name: todo-prometheus
-    ports:
-      - "9090:9090"
+    # (идеал) не публикуем наружу, только внутри сети
+    expose:
+      - "9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
+      - "--web.external-url=http://localhost:8080/prometheus/"
+        # убери --web.route-prefix полностью
     networks:
       - todo-network
 
   grafana:
     image: grafana/grafana:latest
     container_name: todo-grafana
-    ports:
-      - "3000:3000"
+    # (идеал) не публикуем наружу, только внутри сети
+    expose:
+      - "3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_SECURITY_ADMIN_USER: admin
+        GF_SECURITY_ADMIN_PASSWORD: admin
+        GF_SECURITY_ADMIN_USER: admin
+        GF_SERVER_DOMAIN: localhost
+        GF_SERVER_ROOT_URL: "http://localhost:8080/grafana/"
+        GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+        GF_SERVER_ENFORCE_DOMAIN: "false"
+        GF_SECURITY_CSRF_TRUSTED_ORIGINS: "http://localhost:8080"
+        GF_SECURITY_CSRF_ADDITIONAL_HEADERS: "X-Forwarded-Host"
+
+
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus
     networks:

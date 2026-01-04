@@ -10,7 +10,33 @@ spring:
       port: 6379
   cloud:
     gateway:
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 1s
       routes:
+
+        - id: prometheus-ui
+          uri: http://todo-prometheus:9090
+          predicates:
+            - Path=/prometheus/**
+          metadata:
+            response-timeout: -1
+        - id: todo-api-swagger
+          uri: http://todo-api:8080
+          predicates:
+            - Path=/swagger-ui/**,/swagger-ui.html,/v3/api-docs/**
+
+
+        - id: grafana-ui
+          uri: http://todo-grafana:3000
+          predicates:
+            - Path=/grafana/**
+          metadata:
+            response-timeout: -1
+          # Важно: никаких StripPrefix/RewritePath тут
+
+
+
         - id: todo-api
           uri: http://todo-api:8080
           predicates:
@@ -43,6 +69,7 @@ resilience4j:
   circuitbreaker:
     instances:
       todoApiCb:
+        registerHealthIndicator: true
         slidingWindowSize: 20
         permittedNumberOfCallsInHalfOpenState: 3
         waitDurationInOpenState: 10s
